@@ -60,12 +60,13 @@ function set_gaussian!(
         for i = 2:nx
             r = (cl^2) / Rv[i]
 
-            bump = 0.0
-            if ((r < ru) && (r > rl))
-                bump = exp(-1.0 * width / (r - rl)) * exp(-2.0 * width / (ru - r))
-            end
+            #bump = 0.0
+            #if ((r < ru) && (r > rl))
+            #    bump = exp(-1.0 * width / (r - rl)) * exp(-2.0 * width / (ru - r))
+            #end
 
-            f.n[i, j] = (((r - rl) / width)^2) * (((ru - r) / width)^2) * bump
+            #f.n[i, j] = (((r - rl) / width)^2) * (((ru - r) / width)^2) * bump
+            f.n[i, j] = exp(-(r-(rl+ru)/2)^2/width^2)
             f.n[i, j] *= swal(spin, mv, l_ang, Yv[j])
             
             p.n[i, j] = 0.0
@@ -138,31 +139,33 @@ function set_qnm!(
     lpoly = h5f["angular_coef"]
     lmin = max(abs(spin), abs(mv))
     max_val = 0.0
+    auxf = zeros(ComplexF64, nx, ny)
 
     # only set the field if an evolution m matches the m mode in initial data
     if mv==idm
         for j = 1:ny
             for i = 1:nx
-                f.n[i, j] = rpoly( (2 * Rv[i])/maximum(Rv) -1 )
-                f.n[i, j] *= sum([
+                auxf[i, j] = rpoly( (2 * Rv[i])/maximum(Rv) -1 )
+                auxf[i, j] *= sum([
                     (-1)^l * lpoly[l+1] * swal(spin, mv, l + lmin, Yv[j]) for l = 0:(length(lpoly)-1)
                 ])
-                max_val = max(abs(f.n[i, j]), max_val)
+                max_val = max(abs(auxf[i, j]), max_val)
             end
         end
 
         for j = 1:ny
             for i = 1:nx
-                f.n[i, j] *= amp / max_val
-                f.np1[i, j] = f.n[i, j]
+                auxf[i, j] *= amp / max_val
+                f.n[i,j] += auxf[i,j]
+                f.np1[i, j] += auxf[i,j]
             end
         end
         ## p = f,t = -iωf  
         omega = h5f["omega"][1]
         for j = 1:ny
             for i = 1:nx
-                p.n[i, j] = -im * omega * f.n[i, j]
-                p.np1[i, j] = p.n[i, j]
+                p.n[i, j] += -im * omega * auxf[i, j]
+                p.np1[i, j] += -im * omega * auxf[i, j]
             end
         end
 

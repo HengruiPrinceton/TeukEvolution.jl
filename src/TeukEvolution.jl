@@ -294,19 +294,23 @@ function launch(params::Dict{String,Any})::Nothing
             end
         end
     elseif params["id_kind"] == "qnm"
-        for (mi, mv) in enumerate(Mv)
-            Id.set_qnm!(
-                lin_f[mv],
-                lin_p[mv],
-                psi_spin,
-                mv,
-                params["id_overtone_n"],
-                params["id_filename"],
-                params["id_amp"],
-                params["id_m"],
-                Rv,
-                Yv,
-            )
+        overtone_n = params["id_overtone_n"]
+        overtone_amp = params["id_qnm_amp"]
+        for mv in Mv
+            for (ni,n) in enumerate(overtone_n)
+                Id.set_qnm!(
+                    lin_f[mv],
+                    lin_p[mv],
+                    psi_spin,
+                    mv,
+                    n,
+                    params["id_filename"],
+                    overtone_amp[ni],
+                    params["id_m"],
+                    Rv,
+                    Yv,
+                )
+            end
             Io.save_csv(t = 0.0, mv = mv, outdir = outdir, f = lin_f[mv])
             Io.save_csv(t = 0.0, mv = mv, outdir = outdir, f = lin_p[mv])
             if runtype == "reconstruction"
