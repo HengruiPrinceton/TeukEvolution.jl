@@ -6,14 +6,10 @@ module Evolution
 include("Fields.jl")
 include("Radial.jl")
 include("Sphere.jl")
-include("BackgroundNP.jl")
-include("GHP.jl")
 
 using .Fields: Field
 import .Radial
 import .Sphere
-import .BackgroundNP: NP_0
-import .GHP: GHP_ops
 
 const half = 1.0 / 2.0
 const third = 1.0 / 3.0
