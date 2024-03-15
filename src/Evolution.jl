@@ -6,10 +6,12 @@ module Evolution
 include("Fields.jl")
 include("Radial.jl")
 include("Sphere.jl")
+include("Source.jl")
 
 using .Fields: Field
 import .Radial
 import .Sphere
+import .Source
 
 const half = 1.0 / 2.0
 const third = 1.0 / 3.0
@@ -27,6 +29,8 @@ struct Evo_lin_f
 
     S_lapl::Array{Float64,2}
     S_fltr::Array{Float64,2}
+
+    S::Array{ComplexF64,2} # Source term
 
     mv::Int64
 
@@ -52,6 +56,8 @@ struct Evo_lin_f
 
         S_lapl = zeros(Float64, ny, ny)
         S_fltr = zeros(Float64, ny, ny)
+
+        S = zeros(Float64, nx, ny)
 
         pre = zeros(Float64, nx, ny)
 
@@ -109,7 +115,7 @@ struct Evo_lin_f
             end
         end
 
-        return new(A_pp, A_pq, B_pp, B_pq, B_pf, pre, S_lapl, S_fltr, mv)
+        return new(A_pp, A_pq, B_pp, B_pq, B_pf, pre, S_lapl, S_fltr, S, mv)
     end
 end
 
@@ -158,6 +164,7 @@ function set_kp(
     B_pp::Array{ComplexF64,2},
     B_pq::Array{ComplexF64,2},
     B_pf::Array{ComplexF64,2},
+    S::Array{ComplexF64,2},
 )
     nx, ny = size(kp)
     for j = 1:ny
@@ -169,7 +176,7 @@ function set_kp(
                 B_pq[i, j] * f_rd1[i, j] +
                 B_pf[i, j] * f[i, j]
                 +
-                sph_lap[i, j]
+                sph_lap[i, j] + S[i, j]
             )
         end
     end
@@ -179,7 +186,7 @@ end
 """
 Fourth order Runge-Kutta evolution of linear field 
 """
-function Evolve_lin_f!(lin_f, lin_p, Evo::Evo_lin_f, dr::Float64, dt::Float64)::Nothing
+function Evolve_lin_f!(lin_f, lin_p, Rvals::Vector{Float64},Evo::Evo_lin_f, dr::Float64, dt::Float64, t::Float64)::Nothing
     @assert Evo.mv == lin_f.mv
     @assert Evo.mv == lin_p.mv
 
@@ -205,6 +212,7 @@ function Evolve_lin_f!(lin_f, lin_p, Evo::Evo_lin_f, dr::Float64, dt::Float64)::
     B_pp = Evo.B_pp
     B_pq = Evo.B_pq
     B_pf = Evo.B_pf
+    S    = Evo.S
 
     laplM = Evo.S_lapl
     fltrM = Evo.S_fltr
@@ -217,8 +225,8 @@ function Evolve_lin_f!(lin_f, lin_p, Evo::Evo_lin_f, dr::Float64, dt::Float64)::
     Radial.set_d2!(f_rd2, f_n, dr)
 
     Sphere.angular_matrix_mult!(f_sph_lap, f_n, laplM)
-
-    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_n, p_n, pre, A_pp, A_pq, B_pp, B_pq, B_pf)
+    Source.Evaluate_Source!(Rvals,t,S)
+    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_n, p_n, pre, A_pp, A_pq, B_pp, B_pq, B_pf, S)
     for j = 1:ny
         for i = 1:nx
             f_k[i, j] = p_n[i, j]
@@ -237,7 +245,8 @@ function Evolve_lin_f!(lin_f, lin_p, Evo::Evo_lin_f, dr::Float64, dt::Float64)::
 
     Sphere.angular_matrix_mult!(f_sph_lap, f_tmp, laplM)
 
-    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_tmp, p_tmp, pre, A_pp, A_pq, B_pp, B_pq, B_pf)
+    Source.Evaluate_Source!(Rvals,t + half * dt,S)
+    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_tmp, p_tmp, pre, A_pp, A_pq, B_pp, B_pq, B_pf, S)
     for j = 1:ny
         for i = 1:nx
             f_k[i, j] = p_tmp[i, j]
@@ -256,7 +265,7 @@ function Evolve_lin_f!(lin_f, lin_p, Evo::Evo_lin_f, dr::Float64, dt::Float64)::
 
     Sphere.angular_matrix_mult!(f_sph_lap, f_tmp, laplM)
 
-    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_tmp, p_tmp, pre, A_pp, A_pq, B_pp, B_pq, B_pf)
+    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_tmp, p_tmp, pre, A_pp, A_pq, B_pp, B_pq, B_pf, S)
     for j = 1:ny
         for i = 1:nx
             f_k[i, j] = p_tmp[i, j]
@@ -275,7 +284,8 @@ function Evolve_lin_f!(lin_f, lin_p, Evo::Evo_lin_f, dr::Float64, dt::Float64)::
 
     Sphere.angular_matrix_mult!(f_sph_lap, f_tmp, laplM)
 
-    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_tmp, p_tmp, pre, A_pp, A_pq, B_pp, B_pq, B_pf)
+    Source.Evaluate_Source!(Rvals,t + dt,S)
+    set_kp(p_k, f_rd1, f_rd2, f_sph_lap, p_rd1, f_tmp, p_tmp, pre, A_pp, A_pq, B_pp, B_pq, B_pf, S)
     for j = 1:ny
         for i = 1:nx
             f_k[i, j] = p_tmp[i, j]

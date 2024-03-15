@@ -168,25 +168,24 @@ function launch(params::Dict{String,Any})::Nothing
     println("Beginning evolution")
 
     for tc = 1:nt
-        if runtype == "linear_field"
-            Threads.@threads for mv in Mv
-                Evolve_lin_f!(lin_f[mv], lin_p[mv], evo_psi4[mv], dr, dt)
+        # time of evolution
+        t = (tc - 1) * dt / bhm
 
-                lin_f_n = lin_f[mv].n
-                lin_p_n = lin_p[mv].n
-                lin_f_np1 = lin_f[mv].np1
-                lin_p_np1 = lin_p[mv].np1
+        Threads.@threads for mv in Mv
+            Evolve_lin_f!(lin_f[mv], lin_p[mv], Rv, evo_psi4[mv], dr, dt, t)
 
-                for j = 1:ny
-                    for i = 1:nx
-                        lin_f_n[i, j] = lin_f_np1[i, j]
-                        lin_p_n[i, j] = lin_p_np1[i, j]
-                    end
+            lin_f_n = lin_f[mv].n
+            lin_p_n = lin_p[mv].n
+            lin_f_np1 = lin_f[mv].np1
+            lin_p_np1 = lin_p[mv].np1
+
+            for j = 1:ny
+                for i = 1:nx
+                    lin_f_n[i, j] = lin_f_np1[i, j]
+                    lin_p_n[i, j] = lin_p_np1[i, j]
                 end
             end
-        else
-            throw(DomainError(runtype, "Unsupported `runtype` in parameter file"))
-        end
+        end    
         if tc % ts == 0
             t = tc * dt / bhm
             println("time/bhm ", t)
